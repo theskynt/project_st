@@ -399,6 +399,9 @@ void collect() {
     delay(3000);
 
     float distance = sensor_IR.getDistance();
+    if (distance > 25){
+      distance = 20;
+    }
     px = px + (distance - 7);
     inverse_kinematics(a1, a2, a3, phi, px, py);
     controlWrist(theta3);
@@ -437,13 +440,13 @@ void motor_control() {
   if (Serial.available() > 0) {
     input = Serial.readStringUntil('\n');
     if (input == "stop") {
-      Serial.println("stop");
+      // Serial.println("stop");
       robotRunning = false;
       return;
     }else if (input == "full"){
       full = 1;
-      Serial.println("full");
-      Serial.println(full);
+      // Serial.println("full");
+      // Serial.println(full);
       return;
     }
   } else {
@@ -482,7 +485,7 @@ void motor_control() {
             backward();
             robotRunning = false;
             if (position == rail) {
-              Serial.println("เสร็จจจจริงจริ๊ง");
+              sendDataToPython("finish");
             }
           }
       }else {
@@ -514,7 +517,7 @@ void motor_control() {
               if (position == rail) {
                 right();
                 backhome = 1;
-                Serial.println("เสร็จจจจ");
+                // Serial.println("เสร็จจจจ");
               } else {
                 track = track + 1;
                 left();
@@ -566,7 +569,7 @@ void loop() {
       robotRunning = true;
       full = 0;
       backhome = 0;
-      Serial.println("start");
+      // Serial.println("start");
       jump();
     }
   }
