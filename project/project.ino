@@ -1,81 +1,53 @@
 #include <Arduino.h>
 #include <math.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <SharpIR.h>
 #define PI 3.14159265358979323846
 
 // สร้าง Object สำหรับโมดูล PCA9685 ให้ชื่อ pwm ค่า Address คือ Default (0x40)
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
-#define servoMin  130       // ค่า Pulse ต่ำสุด (องศา 0)
-#define servoMax  600    // ค่า Pulse สูงสุด (องศา 180)
-
+//แขนกล
+#define servoMin 130  // ค่า Pulse ต่ำสุด (องศา 0)
+#define servoMax 600  // ค่า Pulse สูงสุด (องศา 180)
 #define base 0
 #define shoulder 1
 #define elbow 2
 #define wrist 3
 #define gripper 4
 
+// กำหนดขาที่ต่อกับ GP2Y0A41SK
+const int irPin = A0;
+
+// กำหนดรุ่นของเซ็นเซอร์ (GP2Y0A41SK มีรุ่นที่ต่างกัน)
+const int model = SharpIR::GP2Y0A41SK0F;
+
+SharpIR sensor_IR(model, irPin);
+
 bool robotRunning = false;
 
+float phi = 0;    //องศาที่แขนตั้งฉากกับพื้น
+float a1 = 10.5;  // ความยาวจากlink2 ไป link3
+float a2 = 12.5;  // ความยาวจากlink3 ไป link4
+float a3 = 18.0;  // ความยาวจากlink4 ไป มือจับ (gripper)
 
-float phi = 0;  //องศาที่แขนตั้งฉากกับพื้น
-float a1 = 10.5; // ความยาวจากlink2 ไป link3
-float a2 = 12.5; // ความยาวจากlink3 ไป link4
-float a3 = 18.0; // ความยาวจากlink4 ไป มือจับ (gripper)
-
-float px;       // Add missing semicolons
-float py;       // Add missing semicolons
-float theta1;   // Add missing semicolons
-float theta2;   // Add missing semicolons
-float theta3;   // Add missing semicolons
+float px;      // Add missing semicolons
+float py;      // Add missing semicolons
+float theta1;  // Add missing semicolons
+float theta2;  // Add missing semicolons
+float theta3;  // Add missing semicolons
 
 float base_angle = 180;
 float shoulder_angle = 29.22;
 float elbow_angle = 89.67;
 float wrist_angle = 119.55;
-float gripper_angle = 0;int sensor1 = 6;
-int sensor2 = 5;
-int sensor3 = 4;
-int sensor4 = 3;
-int sensor5 = 2;
-
-
-void setup() {
-  pinMode(sensor1, INPUT);
-  pinMode(sensor2, INPUT);
-  pinMode(sensor3, INPUT);
-  pinMode(sensor4, INPUT);
-  pinMode(sensor5, INPUT);
- 
-  Serial.begin(9600);
-}
-
-void loop() {
-  int val1 = digitalRead(sensor1);
-  int val2 = digitalRead(sensor2);
-  int val3 = digitalRead(sensor3);
-  int val4 = digitalRead(sensor4);
-  int val5 = digitalRead(sensor5);
-
-  Serial.print ("  ");
-  Serial.print (val1);
-  Serial.print ("  ");
-  Serial.print (val2);
-  Serial.print ("  ");
-  Serial.print (val3);
-  Serial.print ("  ");
-  Serial.print (val4);
-  Serial.print ("  ");
-  Serial.println (val5);
-  
-  delay(300);
-}
+float gripper_angle = 0;
 
 String input;
 
 // เซนเซอร์ the ultrasonic sensor
-const int pingPin = 13; // Trig
-const int inPin = 12;   // Echo
+const int pingPin = 13;  // Trig
+const int inPin = 12;    // Echo
 
 //ค่า PID
 float Kp = 10, Ki = 5, Kd = 5;
@@ -89,14 +61,14 @@ int sensor[5] = { 0, 0, 0, 0, 0 };
 int track = 0;
 int full = 0;
 int rail = 2;
-int t2 = 0;
+int position = 0;
 int online = 0;
 int backhome = 0;
 int tree = 0;
 int backward_status = 0;
 
 //ความเร็วมอเตอร์
-int initial_motor_speed = 80;  //บวกลบแล้วห้ามเกิน255
+int initial_motor_speed = 70;  //บวกลบแล้วห้ามเกิน255
 
 // ฟังก์ชันสำหรับแปลงค่าองศาเป็น Pulse
 int angleToPulse(float angle) {
@@ -153,32 +125,32 @@ void controlBase(float targetAngle) {
 
 void controlShoulder(float targetAngle) {
   if (shoulder_angle < targetAngle) {
-    for (float pulse = shoulder_angle; pulse <= targetAngle; pulse++){
+    for (float pulse = shoulder_angle; pulse <= targetAngle; pulse++) {
       pwm.setPWM(shoulder, 0, angleToPulse(pulse));
-      shoulder_angle = pulse;                           
-    delay(30);
+      shoulder_angle = pulse;
+      delay(30);
     }
   } else {
-    for (float pulse = shoulder_angle; pulse >= targetAngle; pulse--){
+    for (float pulse = shoulder_angle; pulse >= targetAngle; pulse--) {
       pwm.setPWM(shoulder, 0, angleToPulse(pulse));
-      shoulder_angle = pulse;                           
-    delay(30);
+      shoulder_angle = pulse;
+      delay(30);
     }
   }
 }
 
 void controlElbow(float targetAngle) {
   if (elbow_angle < targetAngle) {
-    for (float pulse = elbow_angle; pulse <= targetAngle; pulse++){
+    for (float pulse = elbow_angle; pulse <= targetAngle; pulse++) {
       pwm.setPWM(elbow, 0, angleToPulse(pulse));
-      elbow_angle = pulse;                           
-    delay(30);
+      elbow_angle = pulse;
+      delay(30);
     }
   } else {
-    for (float pulse = elbow_angle; pulse >= targetAngle; pulse--){
+    for (float pulse = elbow_angle; pulse >= targetAngle; pulse--) {
       pwm.setPWM(elbow, 0, angleToPulse(pulse));
-      elbow_angle = pulse;                           
-    delay(30);
+      elbow_angle = pulse;
+      delay(30);
     }
   }
 }
@@ -215,37 +187,10 @@ void controlGripper(float targetAngle) {
   }
 }
 
-
-long microsecondsToCentimeters(long microseconds) {
-  // The speed of sound is 340 m/s or 29 microseconds per centimeter.
-  // The ping travels out and back, so to find the distance of the
-  // object we take half of the distance travelled.
-  return microseconds / 29 / 2;
-}
-
 void sendDataToPython(String data) {
   Serial.print(data);
 }
 
-
-long getUltrasonicDistance() {
-  long duration, cm;
-
-  pinMode(pingPin, OUTPUT);
-
-  digitalWrite(pingPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(pingPin, HIGH);
-  delayMicroseconds(5);
-  digitalWrite(pingPin, LOW);
-
-  pinMode(inPin, INPUT);
-  duration = pulseIn(inPin, HIGH);
-
-  cm = microsecondsToCentimeters(duration);
-  
-  return cm;
-}
 
 void read_sensor_values() {
   //เซ็ทIR
@@ -288,270 +233,306 @@ void calculate_pid() {
   previous_error = error;
 }
 
-void forward(){
+void forward() {
   // Calculating the effective motor speed:
   int left_motor_speed = initial_motor_speed + PID_value;
   int right_motor_speed = initial_motor_speed - PID_value;
   // The motor speed should not exceed the max PWM value
   left_motor_speed = constrain(left_motor_speed, 0, 255);
   right_motor_speed = constrain(right_motor_speed, 0, 255);
-  
-  analogWrite(10, left_motor_speed);  // Left Motor Speed
-  analogWrite(11, right_motor_speed); // Right Motor Speed
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
+
+  analogWrite(10, left_motor_speed);   // Left Motor Speed
+  analogWrite(11, right_motor_speed);  // Right Motor Speed
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
 }
 
 
-void left(){
+void left() {
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);  // Right Motor Speed
-  analogWrite(A0, 0);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
   delay(900);
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
   delay(500);
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 255);
-  while(digitalRead(2) == 1);
-  while(digitalRead(2) == 0);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, HIGH);
+  while (digitalRead(2) == 1)
+    ;
+  while (digitalRead(2) == 0)
+    ;
 }
 
-void right(){
+void right() {
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);  // Right Motor Speed
-  analogWrite(A0, 0);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
   delay(900);
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
   delay(500);
-  analogWrite(A0, 0);
-  analogWrite(A1, 255);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
-  while(digitalRead(6) == 1);
-  while(digitalRead(6) == 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, HIGH);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
+  while (digitalRead(6) == 1)
+    ;
+  while (digitalRead(6) == 0)
+    ;
 }
 
-void backward(){
+void backward() {
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);  // Right Motor Speed
-  analogWrite(A0, 0);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
   delay(900);
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 255);
-  delay(900);
-  analogWrite(A0, 0); //stop switch
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
-  delay(200);
-  analogWrite(10, 110);  // Left Motor Speed
-  analogWrite(11, 110); 
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
-  delay(800);
-  analogWrite(A0, 0); //stop switch
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, HIGH);
+  delay(850);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
   delay(200);
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);
-  analogWrite(A0, 0);
-  analogWrite(A1, 255);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
-  while(digitalRead(6) == 1);
-  while(digitalRead(6) == 0);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
+  delay(700);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
+  delay(200);
   analogWrite(10, 110);  // Left Motor Speed
   analogWrite(11, 110);
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, HIGH);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
+  while (digitalRead(6) == 1)
+    ;
+  while (digitalRead(6) == 0)
+    ;
+  analogWrite(10, 110);  // Left Motor Speed
+  analogWrite(11, 110);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
   delay(100);
 }
 
-void jump(){
+void jump() {
   analogWrite(10, 110);  // Left Motor Speed
-  analogWrite(11, 110); 
-  analogWrite(A0, 255);
-  analogWrite(A1, 0);
-  analogWrite(A2, 255);
-  analogWrite(A3, 0);
+  analogWrite(11, 110);
+  digitalWrite(13, HIGH);
+  digitalWrite(12, LOW);
+  digitalWrite(9, HIGH);
+  digitalWrite(8, LOW);
   delay(500);
 }
 
-void collect(){
-      sendDataToPython("open");
-      stop();
-      delay(500);
-      analogWrite(10, 110);  // Stop Left Motor
-      analogWrite(11, 110);  // Stop Right Motor
-      analogWrite(A0, 0);  // Set Left Motor Pins to 0
-      analogWrite(A1, 255);
-      analogWrite(A2, 0);  // Set Right Motor Pins to 0
-      analogWrite(A3, 255);
-      delay(300);
-      stop();
-      delay(6000);
-      while(Serial.available() > 0){
-        input = Serial.readStringUntil('\n');
-        py = input.toFloat();
-        analogWrite(10, 0);  // Stop Left Motor
-        analogWrite(11, 0);  // Stop Right Motor
-        analogWrite(A0, 0);  // Set Left Motor Pins to 0
-        analogWrite(A1, 0);
-        analogWrite(A2, 0);  // Set Right Motor Pins to 0
-        analogWrite(A3, 0);
-
-        px = 15;
-        
-        inverse_kinematics(a1, a2, a3, phi, px, py);
-
-        controlShoulder(theta1);
-        controlElbow(theta2);
-        controlWrist(theta3);
-        delay(3000); 
-
-        long distance = getUltrasonicDistance();
-        delay(1000); 
-
-        px = px + (distance - 7);
-        inverse_kinematics(a1, a2, a3, phi, px, py);
-        controlWrist(theta3);
-        controlElbow(theta2);
-        controlShoulder(theta1);
-        pwm.setPWM(gripper, 0, angleToPulse(55));
-        delay(1000); 
-        controlShoulder(29.22);
-        controlElbow(89.67);
-        controlWrist(119.55);
-        controlBase(180);
-        controlBase(90);
-        controlShoulder(90);
-        controlElbow(95);
-        controlWrist(100);
-        pwm.setPWM(gripper, 0, angleToPulse(0));
-        delay(1000); 
-        controlShoulder(29.22);
-        controlElbow(89.67);
-        controlWrist(119.55);
-        controlBase(180);
-        sendDataToPython("success");
-        delay(5000);
-      }
-      sendDataToPython("close");
-      jump();
-      if (backward_status == 0) {
-        tree=tree+1;
-      }
-      else {
-        tree=tree-1;
-      }
-}
-void stop(){
+void stop() {
   analogWrite(10, 0);  // Left Motor Speed
   analogWrite(11, 0);  // Right Motor Speed
-  analogWrite(A0, 0);
-  analogWrite(A1, 0);
-  analogWrite(A2, 0);
-  analogWrite(A3, 0);
+  digitalWrite(13, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(8, LOW);
+}
+
+void collect() {
+  sendDataToPython("open");
+  stop();
+  delay(500);
+  analogWrite(10, 110);  // Stop Left Motor
+  analogWrite(11, 110);  // Stop Right Motor
+  digitalWrite(13, LOW);
+  digitalWrite(12, HIGH);
+  digitalWrite(9, LOW);
+  digitalWrite(8, HIGH);
+  delay(300);
+  stop();
+  delay(6000);
+  while (Serial.available() > 0) {
+    input = Serial.readStringUntil('\n');
+    py = input.toFloat();
+    analogWrite(10, 0);  // Stop Left Motor
+    analogWrite(11, 0);  // Stop Right Motor
+    digitalWrite(13, LOW);
+    digitalWrite(12, LOW);
+    digitalWrite(9, LOW);
+    digitalWrite(8, LOW);
+
+    px = 15;
+
+    inverse_kinematics(a1, a2, a3, phi, px, py);
+
+    controlShoulder(theta1);
+    controlElbow(theta2);
+    controlWrist(theta3);
+    delay(3000);
+
+    float distance = sensor_IR.getDistance();
+    px = px + (distance - 7);
+    inverse_kinematics(a1, a2, a3, phi, px, py);
+    controlWrist(theta3);
+    controlElbow(theta2);
+    controlShoulder(theta1);
+    pwm.setPWM(gripper, 0, angleToPulse(55));
+    delay(1000);
+    controlShoulder(29.22);
+    controlElbow(89.67);
+    controlWrist(119.55);
+    controlBase(180);
+    controlBase(90);
+    controlShoulder(90);
+    controlElbow(95);
+    controlWrist(100);
+    pwm.setPWM(gripper, 0, angleToPulse(0));
+    delay(1000);
+    controlShoulder(29.22);
+    controlElbow(89.67);
+    controlWrist(119.55);
+    controlBase(180);
+    sendDataToPython("success");
+    delay(5000);
+  }
+  sendDataToPython("close");
+  jump();
+  if (backward_status == 0) {
+    tree = tree + 1;
+  } else {
+    tree = tree - 1;
+  }
 }
 
 
-void motor_control(){
-
-  if (online == 0){
-    if (sensor[0] == 0 && sensor[1] == 0 && sensor[2] == 0 && sensor[3] == 0 && sensor[4] == 0){
-      if (backhome == 0){
-        if (t2 > track){
-          jump();
-          track = track + 1;
-        }
-        else{
-          left();
-          online = 1;
-        }
-      }
-      else{
-        if (track > 0){
-          jump();
-          track = track - 1;
-        }
-        else if (track == 0){
-          stop();
-          robotRunning = false;
-        }
-      }
+void motor_control() {
+  if (Serial.available() > 0) {
+    input = Serial.readStringUntil('\n');
+    if (input == "stop") {
+      Serial.println("stop");
+      robotRunning = false;
+      return;
+    }else if (input == "full"){
+      full = 1;
+      Serial.println("full");
+      Serial.println(full);
+      return;
     }
-    else{
-      forward();
-    }
-  }
-  else if (online == 1){
-    if (sensor[0] == 1 && sensor[1] == 1 && sensor[2] == 1 && sensor[3] == 1 && sensor[4] == 1){
-      backward();
-      backward_status=1;
-    }
-    else if (sensor[0] == 0 && sensor[1] == 0 && sensor[2] == 0 && sensor[3] == 0 && sensor[4] == 0){
-      if (backward_status==1){
-        if (tree>0){
-          collect();
-        }
-        else{
-          backward_status=0;
-          if (full == 1){
-            right();
-            online = 0;
-            backhome = 1;
+  } else {
+    if (online == 0) {
+      if (sensor[0] == 0 && sensor[1] == 0 && sensor[2] == 0 && sensor[3] == 0 && sensor[4] == 0) {
+        if (backhome == 0) {
+          if (position > track) {
+            analogWrite(10, 80);  // Stop Left Motor
+            analogWrite(11, 80);  // Stop Right Motor
+            digitalWrite(13, HIGH);
+            digitalWrite(12, LOW);
+            digitalWrite(9, HIGH);
+            digitalWrite(8, LOW);
+            delay(500);
+            track = track + 1;
+          } else {
+            left();
+            online = 1;
           }
-          else if (full == 0){
-            online = 0;
-            t2 = t2 + 1;
-            if (t2 == rail){
+        } else {
+          if (track > 0) {
+            analogWrite(10, 80);  // Stop Left Motor
+            analogWrite(11, 80);  // Stop Right Motor
+            digitalWrite(13, HIGH);
+            digitalWrite(12, LOW);
+            digitalWrite(9, HIGH);
+            digitalWrite(8, LOW);
+            delay(500);
+            track = track - 1;
+          }
+        }
+      }else if (sensor[0] == 1 && sensor[1] == 1 && sensor[2] == 1 && sensor[3] == 1 && sensor[4] == 1) {
+        if (track == 0) {
+            stop();
+            delay(1000);
+            backward();
+            robotRunning = false;
+            if (position == rail) {
+              Serial.println("เสร็จจจจริงจริ๊ง");
+            }
+          }
+      }else {
+        forward();
+      }
+    } else if (online == 1) {
+      if (sensor[0] == 1 && sensor[1] == 1 && sensor[2] == 1 && sensor[3] == 1 && sensor[4] == 1) {
+        backward();
+        backward_status = 1;
+      } else if (sensor[0] == 0 && sensor[1] == 0 && sensor[2] == 0 && sensor[3] == 0 && sensor[4] == 0) {
+        if (backward_status == 1) {
+          if (tree > 0) {
+            if (full == 1) {
+              forward();
+              delay(500);
+              tree = tree - 1;
+            }else{
+              collect();
+            }
+          } else {
+            backward_status = 0;
+            if (full == 1) {
               right();
+              online = 0;
               backhome = 1;
-
-            }
-            else{
-              track = track + 1;
-              left();
+            } else if (full == 0) {
+              online = 0;
+              position = position + 1;
+              if (position == rail) {
+                right();
+                backhome = 1;
+                Serial.println("เสร็จจจจ");
+              } else {
+                track = track + 1;
+                left();
+              }
             }
           }
+        } else if (backward_status == 0) {
+          if (full == 1) {
+              forward();
+              delay(500);
+              tree = tree + 1;
+            }else{
+              collect();
+            }
         }
+      } else {
+        forward();
       }
-      else if(backward_status==0){
-        collect();
-
-      }
-    }
-    else{
-      forward();
     }
   }
 }
@@ -560,7 +541,7 @@ void motor_control(){
 void setup() {
   Serial.begin(9600);
   pwm.begin();
-  pwm.setPWMFreq(60);     // กำหนด Frequency = 60 Hz (เซอร์โวส่วนใหญ่จะทำงานที่ 50-60 Hz)
+  pwm.setPWMFreq(60);  // กำหนด Frequency = 60 Hz (เซอร์โวส่วนใหญ่จะทำงานที่ 50-60 Hz)
   delay(20);
 
   pwm.setPWM(base, 0, angleToPulse(base_angle));
@@ -572,81 +553,30 @@ void setup() {
   //เซ็ทมอเตอร์
   pinMode(10, OUTPUT);  //PWM Pin 1 Left  ENA
   pinMode(11, OUTPUT);  //PWM Pin 2 Right ENB
-  pinMode(A0, OUTPUT);  //Left Motor Pin 1 in 1
-  pinMode(A1, OUTPUT);  //Left Motor Pin 2 in 2
-  pinMode(A2, OUTPUT);  //Right Motor Pin 1 in 3
-  pinMode(A3, OUTPUT);  //Right Motor Pin 2 in 4
-
+  pinMode(13, OUTPUT);  //Left Motor Pin 1 in 1
+  pinMode(12, OUTPUT);  //Left Motor Pin 2 in 2
+  pinMode(9, OUTPUT);   //Right Motor Pin 1 in 3
+  pinMode(8, OUTPUT);   //Right Motor Pin 2 in 4
 }
 
 void loop() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     if (command == "start") {
-      // Serial.print("start");
       robotRunning = true;
+      full = 0;
+      backhome = 0;
+      Serial.println("start");
       jump();
-    } 
+    }
   }
   if (robotRunning) {
-  // Adjust the delay based on your application needs
-
+    // Adjust the delay based on your application needs
     read_sensor_values();
     calculate_pid();
     motor_control();
 
-    if (Serial.available() > 0) {
-      input = Serial.readStringUntil('\n');
-      if (input == "stop"){
-        // Serial.print("stop");
-        robotRunning = false;
-        return;
-      }
-      // else{
-      //   py = input.toFloat();
-      //   analogWrite(10, 0);  // Stop Left Motor
-      //   analogWrite(11, 0);  // Stop Right Motor
-      //   analogWrite(A0, 0);  // Set Left Motor Pins to 0
-      //   analogWrite(A1, 0);
-      //   analogWrite(A2, 0);  // Set Right Motor Pins to 0
-      //   analogWrite(A3, 0);
-
-      //   px = 15;
-        
-      //   inverse_kinematics(a1, a2, a3, phi, px, py);
-
-      //   controlShoulder(theta1);
-      //   controlElbow(theta2);
-      //   controlWrist(theta3);
-      //   delay(3000); 
-
-      //   long distance = getUltrasonicDistance();
-      //   delay(1000); 
-
-      //   px = px + (distance - 7);
-      //   inverse_kinematics(a1, a2, a3, phi, px, py);
-
-      //   controlShoulder(theta1);
-      //   controlElbow(theta2);
-      //   controlWrist(theta3);
-      //   controlGripper(70);
-      //   delay(1000); 
-      //   controlBase(90);
-      //   controlShoulder(90);
-      //   controlElbow(95);
-      //   controlWrist(100);
-      //   controlGripper(0);
-      //   delay(1000); 
-      //   controlShoulder(29.22);
-      //   controlElbow(89.67);
-      //   controlWrist(119.55);
-      //   controlBase(180);
-      //   sendDataToPython("success");
-      //   delay(1000);
-      // }
-    }
-
-  }else{
+  } else {
     stop();
   }
 }
