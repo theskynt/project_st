@@ -31,11 +31,11 @@ float a1 = 10.5;  // ความยาวจากlink2 ไป link3
 float a2 = 12.5;  // ความยาวจากlink3 ไป link4
 float a3 = 18.0;  // ความยาวจากlink4 ไป มือจับ (gripper)
 
-float px;      // Add missing semicolons
-float py;      // Add missing semicolons
-float theta1;  // Add missing semicolons
-float theta2;  // Add missing semicolons
-float theta3;  // Add missing semicolons
+float px;      
+float py;      
+float theta1;  
+float theta2;  
+float theta3;  
 
 float base_angle = 180;
 float shoulder_angle = 29.22;
@@ -60,7 +60,7 @@ int sensor[5] = { 0, 0, 0, 0, 0 };
 //การเดินหุ่น
 int track = 0;
 int full = 0;
-int rail = 2;
+int rail = 2; //ลู่
 int position = 0;
 int online = 0;
 int backhome = 0;
@@ -354,7 +354,7 @@ void jump() {
   digitalWrite(12, LOW);
   digitalWrite(9, HIGH);
   digitalWrite(8, LOW);
-  delay(500);
+  delay(600);
 }
 
 void stop() {
@@ -381,50 +381,64 @@ void collect() {
   delay(6000);
   while (Serial.available() > 0) {
     input = Serial.readStringUntil('\n');
-    py = input.toFloat();
-    analogWrite(10, 0);  // Stop Left Motor
-    analogWrite(11, 0);  // Stop Right Motor
-    digitalWrite(13, LOW);
-    digitalWrite(12, LOW);
-    digitalWrite(9, LOW);
-    digitalWrite(8, LOW);
+    if (input == "full"){
+      full = 1;
+        jump();
+      if (backward_status == 0) {
+        tree = tree + 1;
+      } else {
+        tree = tree - 1;
+      }
+      return;
+    }else{
+       py = input.toFloat();
+      if (py >= 20){
+        py = 19;
+      }
+      py = py + 2;
+      analogWrite(10, 0);  // Stop Left Motor
+      analogWrite(11, 0);  // Stop Right Motor
+      digitalWrite(13, LOW);
+      digitalWrite(12, LOW);
+      digitalWrite(9, LOW);
+      digitalWrite(8, LOW);
 
-    px = 15;
+      px = 15;
 
-    inverse_kinematics(a1, a2, a3, phi, px, py);
+      inverse_kinematics(a1, a2, a3, phi, px, py);
 
-    controlShoulder(theta1);
-    controlElbow(theta2);
-    controlWrist(theta3);
-    delay(3000);
+      controlShoulder(theta1);
+      controlElbow(theta2);
+      controlWrist(theta3);
+      delay(3000);
 
-    float distance = sensor_IR.getDistance();
-    if (distance > 25){
-      distance = 20;
+      float distance = sensor_IR.getDistance();
+      delay(2000);
+      
+      px = px + (distance - 6);
+      inverse_kinematics(a1, a2, a3, phi, px, py);
+      controlWrist(theta3);
+      controlElbow(theta2);
+      controlShoulder(theta1);
+      pwm.setPWM(gripper, 0, angleToPulse(55));
+      delay(1000);
+      controlShoulder(29.22);
+      controlElbow(89.67);
+      controlWrist(119.55);
+      controlBase(180);
+      controlBase(90);
+      controlShoulder(70);
+      controlElbow(95);
+      controlWrist(100);
+      pwm.setPWM(gripper, 0, angleToPulse(0));
+      delay(1000);
+      controlShoulder(29.22);
+      controlElbow(89.67);
+      controlWrist(119.55);
+      controlBase(180);
+      sendDataToPython("success");
+      delay(5000);
     }
-    px = px + (distance - 7);
-    inverse_kinematics(a1, a2, a3, phi, px, py);
-    controlWrist(theta3);
-    controlElbow(theta2);
-    controlShoulder(theta1);
-    pwm.setPWM(gripper, 0, angleToPulse(55));
-    delay(1000);
-    controlShoulder(29.22);
-    controlElbow(89.67);
-    controlWrist(119.55);
-    controlBase(180);
-    controlBase(90);
-    controlShoulder(90);
-    controlElbow(95);
-    controlWrist(100);
-    pwm.setPWM(gripper, 0, angleToPulse(0));
-    delay(1000);
-    controlShoulder(29.22);
-    controlElbow(89.67);
-    controlWrist(119.55);
-    controlBase(180);
-    sendDataToPython("success");
-    delay(5000);
   }
   sendDataToPython("close");
   jump();
@@ -440,13 +454,10 @@ void motor_control() {
   if (Serial.available() > 0) {
     input = Serial.readStringUntil('\n');
     if (input == "stop") {
-      // Serial.println("stop");
       robotRunning = false;
       return;
     }else if (input == "full"){
       full = 1;
-      // Serial.println("full");
-      // Serial.println(full);
       return;
     }
   } else {
@@ -508,9 +519,15 @@ void motor_control() {
           } else {
             backward_status = 0;
             if (full == 1) {
-              right();
-              online = 0;
-              backhome = 1;
+              if (tree > 0) {
+                forward();
+                delay(500);
+                tree = tree + 1;
+              }else {
+                right();
+                online = 0;
+                backhome = 1;
+              }
             } else if (full == 0) {
               online = 0;
               position = position + 1;
